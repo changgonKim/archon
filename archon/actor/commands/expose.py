@@ -63,10 +63,26 @@ async def _do_one_controller(
         )
     )
 
-    # Start integration.
-    await controller.integrate(exposure_time=exp_time)
-
     # Open shutter (placeholder)
+
+    # Use command to access the actor and command the shutter
+    shutter_cmd_open = await command.actor.send_command("osu_actor", "open")
+
+    await shutter_cmd_open  # Block until the command is done (finished or failed)
+    if shutter_cmd_open.status.did_fail:
+        # Do cleanup
+        return command.fail(text="Shutter failed to open")
+
+    # Report status of the shutter
+    replies_open = shutter_cmd_open.replies
+    shutter_status_open = replies_open[-1].body["shutter"]
+    if shutter_status_open not in ["open", "closed"]:
+        return command.fail(text=f"Unknown shutter status {shutter_status_open!r}.")
+
+    command.info(f"Shutter is now {shutter_status_open!r}.")
+
+    # Start integration. _Changgon
+    await controller.integrate(exposure_time=exp_time)
 
     # Wait until the exposure is complete.
     # TODO: Here we should take into account the network and mechanical delay in
@@ -74,6 +90,22 @@ async def _do_one_controller(
     await asyncio.sleep(exp_time)
 
     # Close shutter (placeholder)
+
+    # Close the shutter. Note the double await.
+    shutter_cmd_close = await (await command.actor.send_command("osu_actor", "close"))
+
+    await shutter_cmd_close  # Block until the command is done (finished or failed)
+    if shutter_cmd_close.status.did_fail:
+        # Do cleanup
+        return command.fail(text="Shutter failed to close")
+
+    # Report status of the shutter
+    replies_close = shutter_cmd_close.replies
+    shutter_status_close = replies_close[-1].body["shutter"]
+    if shutter_status_close not in ["closed", "open"]:
+        return command.fail(text=f"Unknown shutter status {shutter_status_close!r}.")
+
+    command.info(f"Shutter is now {shutter_status_close!r}.")
 
     # Wait a little bit and check that we are reading out to a new buffer
     await asyncio.sleep(0.1)
